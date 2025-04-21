@@ -1,0 +1,17 @@
+{
+  "name": "agents",
+  "version": "0.0.0",
+  "scripts": {
+  },
+  "devDependencies": {
+    "dotenv-cli": "^7.4.4",
+    "prettier": "^3.5.0",
+    "turbo": "^2.4.1",
+    "typescript": "^5.7.3",
+    "zod": "3.23.8"
+  },
+  "packageManager": "pnpm@10.3.0",
+  "engines": {
+    "node": ">=18"
+  }
+}
