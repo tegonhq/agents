@@ -1,4 +1,4 @@
-import { BaseSkills } from './base-skills';
+import { BaseSkills } from '../base-skills';
 
 export abstract class APIBaseSkills extends BaseSkills {
   protected headers: Record<string, string>;

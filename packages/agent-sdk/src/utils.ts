@@ -5,6 +5,8 @@ import OpenAI from 'openai';
 
 import { State, TokenCount } from './types';
 import { AgentMessageType, Message } from './message';
+import fs from 'fs';
+import { Logger } from 'pino';
 
 export async function* generate(
   messages: MessageParam[],
@@ -328,5 +330,28 @@ export async function* processTag(
         state.message += chunk;
       }
     }
+  }
+}
+
+export function parseJsonInput(
+  logger: Logger,
+  input: string,
+  defaultValue: string = '{}',
+): any {
+  try {
+    // Check if input is a valid JSON string
+    try {
+      return JSON.parse(input);
+    } catch {
+      // If not a valid JSON string, try to load from file
+      if (fs.existsSync(input)) {
+        return JSON.parse(fs.readFileSync(input, 'utf8'));
+      }
+      // If file doesn't exist, return default value
+      return JSON.parse(defaultValue);
+    }
+  } catch (error) {
+    logger.error(`Unable to parse, ${input}`);
+    return JSON.parse(defaultValue);
   }
 }

@@ -1,7 +1,7 @@
 {
-  "name": "@sigma/github",
+  "name": "@sigma/hevy",
   "version": "0.1.2",
-  "description": "github agent",
+  "description": "hevy agent",
   "files": [
     "dist"
   ],
@@ -36,7 +36,7 @@
     ]
   },
   "dependencies": {
-    "@tegonhq/agent-sdk": "0.1.14",
+    "@tegonhq/agent-sdk": "workspace:*",
     "axios": "^1.7.9",
     "openai": "^4.0.0"
   }

@@ -5,11 +5,23 @@ import { Command } from 'commander';
 import pino, { Logger } from 'pino';
 
 import { AgentMessage, AgentMessageType } from './message';
+import { About } from './types';
+import { parseJsonInput } from 'utils';
+import { BaseSkills } from './base-skills';
+import { spinner, text } from '@clack/prompts';
 
 // Abstract class for BaseAgent
 export abstract class BaseAgent {
   protected program: Command;
   logger: Logger;
+
+  // Add class variables for the options
+  context: string;
+  history: string;
+  excludeSkills: string;
+  configuration: string;
+  autoMode: boolean;
+  print: boolean;
 
   constructor() {
     this.program = new Command();
@@ -73,24 +85,55 @@ export abstract class BaseAgent {
         'Executes the agent with a user message and streams responses',
       )
       .argument('<message>', 'Message to send to the agent')
-      .argument(
-        '<auth>',
-        'Authentication details for API integration (JSON string)',
+      .option(
+        '--context <context>',
+        'General context data as JSON string or path to JSON file',
       )
-      .argument(
-        '[context]',
-        'Context to send to the agent (JSON string or path to .json file)',
-        'context.json',
+      .option(
+        '--history <history>',
+        'Previous execution steps history as JSON string or path to JSON file',
       )
-      .option('--auto-mode', 'Enable automatic mode', false)
-      .action(async (message, context, auth, options) => {
+      .option(
+        '--exclude-skills <skills>',
+        'Comma-separated list of skills to exclude',
+      )
+      .option(
+        '--configuration <config>',
+        'Configuration as JSON string or path to JSON file',
+      )
+      .option('--print', 'Print the response and exit without interactive mode')
+      .option('--auto-mode', 'Enable automatic mode', true)
+      .action(async (message, options) => {
         try {
-          const autoMode = options.autoMode || false;
-          const responses = this.ask(message, context, auth, autoMode);
+          // Update the class variables with the options values
+          this.autoMode = options.autoMode || false;
 
-          for await (const response of responses) {
-            console.log(JSON.stringify(response));
-          }
+          // Process context: parse JSON string or load from file
+          this.context = parseJsonInput(
+            this.logger,
+            options.context || 'context.json',
+          );
+
+          // Process history: parse JSON string or load from file
+          this.history = parseJsonInput(
+            this.logger,
+            options.history || 'history.json',
+            '[]',
+          );
+
+          // Process excludeSkills: split comma-separated string into array
+          this.excludeSkills = options.excludeSkills
+            ? options.excludeSkills.split(',').map((s: string) => s.trim())
+            : [];
+
+          // Process configuration: parse JSON string or load from file
+          this.configuration = parseJsonInput(
+            this.logger,
+            options.configuration || 'config.json',
+          );
+
+          this.print = options.print ?? true;
+          this.ask(message);
         } catch (e) {
           // Handle errors by outputting as JSON
           const errorResponse = JSON.stringify({ error: (e as Error).message });
@@ -103,6 +146,10 @@ export abstract class BaseAgent {
         }
       });
   }
+
+  /**
+   * These are the commands to be extended by the agents
+   */
 
   /**
    * Show version information
@@ -137,9 +184,9 @@ export abstract class BaseAgent {
   /**
    * Get tools information
    */
-  // eslint-disable-next-line @typescript-eslint/array-type
-  skills(): Array<any> {
-    return [];
+  skills() {
+    const skillsHandler = this.getSkillsHandler();
+    console.log(skillsHandler.skills());
   }
 
   /**
@@ -150,17 +197,12 @@ export abstract class BaseAgent {
   }
 
   /**
-   * Abstract method to get jargon information
+   * Abstract method to get agent description and configuration information
+   * @returns A string containing the agent description and any required configuration inputs
+   * that will be passed as configuration parameters when initializing the agent
    */
-  about(): string {
-    return '';
-  }
-
-  /**
-   * Parse and execute CLI commands
-   */
-  async parseAndRun(argv: string[] = process.argv): Promise<void> {
-    await this.program.parseAsync(argv);
+  about(): About {
+    return { description: '', configuration: {} };
   }
 
   /**
@@ -170,10 +212,62 @@ export abstract class BaseAgent {
    * @param auth Authentication dictionary
    * @param autoMode Enable automatic mode
    */
-  abstract ask(
+  async ask(message: string) {
+    let userMessage: string = message;
+
+    // Start the loop
+    while (true) {
+      const response = this.askAgent(userMessage);
+
+      for await (const responseMessage of response) {
+        if (responseMessage.type.includes('THOUGHT')) {
+          process.stdout.write(responseMessage.message);
+        }
+      }
+
+      // If this is the end of the message and auto mode is disabled, ask for user input
+
+      console.log('\n');
+      const spin = spinner();
+      spin.start('Processing...');
+
+      const answer = await text({
+        message: 'Ask...',
+        placeholder: 'Type your question or press Enter to continue',
+      });
+
+      // If user provided input, use it as the next message
+      if (answer && (answer as string).trim() !== '') {
+        userMessage = answer as string;
+        break;
+      } else {
+        // If user just pressed Enter, exit the loop
+        return;
+      }
+    }
+  }
+
+  /**
+   * Abstract method to get the skills handler
+   * @returns A record of skill handlers that can be executed by the agent
+   */
+  abstract getSkillsHandler(): BaseSkills;
+
+  /**
+   * Abstract method to run the agent
+   * @param message Message to send to the agent
+   * @param context Context to send to the agent
+   * @param auth Authentication dictionary
+   * @param autoMode Enable automatic mode
+   */
+  abstract askAgent(
     message: string,
-    context: string,
-    auth: string,
-    autoMode?: boolean,
   ): AsyncGenerator<AgentMessage, void, unknown>;
+
+  /**
+   * Parse and execute CLI commands
+   */
+  async parseAndRun(argv: string[] = process.argv): Promise<void> {
+    await this.program.parseAsync(argv);
+  }
 }

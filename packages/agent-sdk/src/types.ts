@@ -1,9 +1,3 @@
-export interface PassedContext {
-  context?: string;
-  previousHistory?: string;
-  history?: HistoryStep[];
-}
-
 export interface HistoryStep {
   // The agent's reasoning process for this step
   thought?: string;
@@ -50,4 +44,17 @@ export interface State {
   messageEnded: boolean;
   message: string;
   lastSent: string;
+}
+export interface About {
+  description: string;
+  configuration: Record<
+    string,
+    {
+      type: 'string' | 'number' | 'boolean' | 'select';
+      description: string;
+      required: boolean;
+      default?: string | number | boolean;
+      options?: string[]; // For select type inputs
+    }
+  >;
 }

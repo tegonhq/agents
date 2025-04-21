@@ -1,23 +1,16 @@
-import fs from 'fs';
-
 import Handlebars from 'handlebars';
 
-import { BaseAgent } from './base-agent';
-import { AgentMessageType, Message } from './message';
-import { ACTION_PROMPT, OBSERVATION_PROMPT, REACT_PROMPT } from './prompts';
-import {
-  ExecutionState,
-  HistoryStep,
-  PassedContext,
-  TokenCount,
-} from './types';
+import { BaseAgent } from '../base-agent';
+import { AgentMessageType, Message } from '../message';
+import { ACTION_PROMPT, OBSERVATION_PROMPT, REACT_PROMPT } from '../prompts';
+import { ExecutionState, HistoryStep, TokenCount } from '../types';
 import {
   formatToolForPrompt,
   formatToolsForPrompt,
   generate,
   generateRandomId,
   processTag,
-} from './utils';
+} from '../utils';
 
 interface LLMCountResponse {
   response: AsyncGenerator<string, any, any>;
@@ -156,35 +149,8 @@ export abstract class ReactBaseAgent extends BaseAgent {
     return { response, tokenCount };
   }
 
-  async *ask(
-    message: string,
-    context: string,
-    auth: string,
-    autoMode?: boolean,
-  ) {
-    let authConfig = {};
-
-    try {
-      authConfig = JSON.parse(auth);
-    } catch (e) {
-      authConfig = {};
-    }
-
-    let contextObj: PassedContext = {};
-
-    try {
-      // First try to parse as JSON
-      contextObj = JSON.parse(context) as PassedContext;
-    } catch (e) {
-      try {
-        // If JSON parsing fails, try to load from file
-        const fileContent = fs.readFileSync(context, 'utf8');
-        contextObj = JSON.parse(fileContent) as PassedContext;
-      } catch (fileError) {
-        // If both approaches fail, use empty object
-        contextObj = {} as PassedContext;
-      }
-    }
+  async *askAgent(message: string) {
+    const skillsHandler = this.getSkillsHandler();
 
     yield Message('Starting process', AgentMessageType.STREAM_START);
 
@@ -192,11 +158,11 @@ export abstract class ReactBaseAgent extends BaseAgent {
 
     const executionState: ExecutionState = {
       query: message,
-      context: contextObj.context,
-      previousHistory: contextObj.previousHistory,
-      history: contextObj.history ?? [], // Track the full ReAct history
+      context: this.context,
+      previousHistory: this.history,
+      history: [], // Track the full ReAct history
       completed: false,
-      autoMode: autoMode ?? false,
+      autoMode: this.autoMode ?? false,
     };
 
     try {
@@ -340,10 +306,9 @@ export abstract class ReactBaseAgent extends BaseAgent {
 
         const parsedInput = JSON.parse(skillState.message);
 
-        const result = await this.runSkill(
+        const result = await skillsHandler.runSkill(
           skillName ?? '',
           parsedInput,
-          authConfig,
         );
         // Add the input to the step
         stepRecord.skillInput = parsedInput;
@@ -387,30 +352,5 @@ export abstract class ReactBaseAgent extends BaseAgent {
       yield Message(e.message, AgentMessageType.ERROR);
       yield Message('Stream ended', AgentMessageType.STREAM_END);
     }
-
-    try {
-      // Create a context object suitable for saving
-      const contextToSave = {
-        context: executionState.context,
-        previousHistory: executionState.previousHistory,
-        history: executionState.history,
-      };
-
-      // Write to context.json in the current directory
-      fs.writeFileSync('context.json', JSON.stringify(contextToSave, null, 2));
-      // eslint-disable-next-line no-empty
-    } catch (error) {}
   }
-
-  /**
-   * Abstract method to run the skill
-   * @param skillName Which skill to run
-   * @param parameters The data to the skill
-   * @param intergrationConfig headers for the API to run
-   */
-  abstract runSkill(
-    skillName: string,
-    parameters: any,
-    intergrationConfig: Record<string, string>,
-  ): Promise<string>;
 }

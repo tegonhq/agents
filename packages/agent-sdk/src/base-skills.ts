@@ -2,6 +2,7 @@ export abstract class BaseSkills {
   constructor(
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _integrationConfiguration: Record<string, string | number | boolean>,
+    _agentContext?: {},
   ) {}
 
   /**
